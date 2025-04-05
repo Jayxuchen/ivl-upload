@@ -7,39 +7,47 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/otiai10/gosseract/v2"
 )
 
-var teamMap = map[string]string{
-	"1": "Set For Life",
-	"2": "Foundry",
-	"3": "Bellamy and Buds",
-	"4": "Pengyou Power",
-	"5": "Guintu Force",
-	"6": "Reclub Most Wanted",
-	"7": "How I Set Your Mother",
-	"8": "Kicking and Screaming",
-	"9": "Haikrew",
-}
+var teamMap = map[string]string{}
 
 func main() {
 	if len(os.Args) != 3 {
 		log.Fatalf("Usage: go run main.go <image-dir> <team-name>")
 	}
 
+	var err error
+
 	imageDir := os.Args[1]
 	teamName := os.Args[2]
+
+	teamMap, err = buildTeamMapFromImages(imageDir)
+	if err != nil {
+		log.Fatal("Failed to build team map:", err)
+	}
+
+	s, _ := json.MarshalIndent(teamMap, "", "\t")
+	fmt.Print(string(s))
+
+	matchedTeam, err := findClosestTeamName(teamName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Matched input to team: %s\n", matchedTeam)
+
 	var output []string
 	week := 0 // global week counter
 
-	err := filepath.Walk(imageDir, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(imageDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if !info.IsDir() && (strings.HasSuffix(info.Name(), ".png") || strings.HasSuffix(info.Name(), ".jpg")) {
-			titles, w, err := extractMatches(path, teamName, week)
+			titles, w, err := extractMatches(path, matchedTeam, week)
 			if err != nil {
 				return err
 			}
@@ -64,6 +72,66 @@ func main() {
 	}
 
 	fmt.Println("✅ titles.json written successfully")
+}
+
+func buildTeamMapFromImages(dir string) (map[string]string, error) {
+	teamMap := make(map[string]string)
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() && (strings.HasSuffix(info.Name(), ".png") || strings.HasSuffix(info.Name(), ".jpg")) {
+			client := gosseract.NewClient()
+			defer client.Close()
+			client.SetImage(path)
+
+			text, err := client.Text()
+			if err != nil {
+				return err
+			}
+
+			// Inline logic to extract team map
+			lines := strings.Split(text, "\n")
+			teamEntryPattern := regexp.MustCompile(`(\d{1,2})\s+([A-Za-z ]*)\(`)
+
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				matches := teamEntryPattern.FindAllStringSubmatch(line, -1)
+				for _, match := range matches {
+					//fmt.Println(match)
+					if len(match) == 3 {
+						numStr := match[1]
+						name := strings.TrimSpace(match[2])
+
+						num, err := strconv.Atoi(numStr)
+						if err != nil || num > 15 {
+							continue
+						}
+						if _, exists := teamMap[numStr]; !exists {
+							teamMap[numStr] = name
+
+						}
+					}
+				}
+			}
+		}
+		return nil
+	})
+
+	return teamMap, err
+}
+
+func findClosestTeamName(input string) (string, error) {
+	lowerName := strings.ToLower(input)
+
+	for _, name := range teamMap {
+		if strings.Contains(strings.ToLower(name), lowerName) {
+			return name, nil
+		}
+	}
+
+	return "", fmt.Errorf("no team found")
 }
 
 func extractMatches(imagePath, teamName string, startWeek int) ([]string, int, error) {
