@@ -92,6 +92,7 @@ func buildTeamMapFromImages(dir string) (map[string]string, error) {
 			}
 
 			// Inline logic to extract team map
+			text = strings.ReplaceAll(text, "|", "I")
 			lines := strings.Split(text, "\n")
 			teamEntryPattern := regexp.MustCompile(`(\d{1,2})\s+([A-Za-z ]*)\(`)
 
