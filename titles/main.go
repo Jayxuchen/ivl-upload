@@ -30,8 +30,8 @@ func main() {
 		log.Fatal("Failed to build team map:", err)
 	}
 
-	s, _ := json.MarshalIndent(teamMap, "", "\t")
-	fmt.Print(string(s))
+	// s, _ := json.MarshalIndent(teamMap, "", "\t")
+	// fmt.Print(string(s))
 
 	matchedTeam, err := findClosestTeamName(teamName)
 	if err != nil {
@@ -100,7 +100,6 @@ func buildTeamMapFromImages(dir string) (map[string]string, error) {
 				line = strings.TrimSpace(line)
 				matches := teamEntryPattern.FindAllStringSubmatch(line, -1)
 				for _, match := range matches {
-					//fmt.Println(match)
 					if len(match) == 3 {
 						numStr := match[1]
 						name := strings.TrimSpace(match[2])
